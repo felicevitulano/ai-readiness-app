@@ -100,6 +100,33 @@ export default function AdminPage() {
     }
   };
 
+  const [generatingReport, setGeneratingReport] = useState<string | null>(null);
+
+  const handleGenerateReport = async (id: string) => {
+    setGeneratingReport(id);
+    try {
+      const res = await fetch(`/api/assessments/${id}/report`, { method: "POST" });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        alert(err.error || "Errore durante la generazione del report");
+        return;
+      }
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      const assessment = assessments.find((x) => x.id === id);
+      const name = assessment?.company.ragioneSociale.replace(/\s+/g, "_") || "report";
+      a.download = `Report_AI_Readiness_${name}.pdf`;
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch {
+      alert("Errore di rete durante la generazione del report");
+    } finally {
+      setGeneratingReport(null);
+    }
+  };
+
   if (loading) {
     return (
       <div className="flex items-center justify-center py-20">
@@ -218,6 +245,17 @@ export default function AdminPage() {
                     </td>
                     <td className="px-4 py-3">
                       <div className="flex gap-2">
+                        <button
+                          onClick={() => handleGenerateReport(a.id)}
+                          disabled={generatingReport === a.id || a.status !== "completed"}
+                          className="text-tn-blue hover:underline text-sm font-medium disabled:opacity-40 disabled:cursor-not-allowed flex items-center gap-1"
+                          title="Genera Report PDF"
+                        >
+                          {generatingReport === a.id ? (
+                            <div className="animate-spin rounded-full h-3 w-3 border-b-2 border-tn-blue" />
+                          ) : null}
+                          Report
+                        </button>
                         <button
                           onClick={() => handleExport(a.id)}
                           className="text-green-600 hover:underline text-sm font-medium"

@@ -1,6 +1,8 @@
 import { prisma } from "@/lib/prisma";
 import { NextResponse } from "next/server";
 import Anthropic from "@anthropic-ai/sdk";
+import fs from "fs";
+import path from "path";
 
 export async function POST(
   _request: Request,
@@ -20,7 +22,14 @@ export async function POST(
     return NextResponse.json({ error: "Not found" }, { status: 404 });
   }
 
-  const apiKey = process.env.ANTHROPIC_API_KEY;
+  let apiKey = process.env.ANTHROPIC_API_KEY;
+  if (!apiKey || apiKey === "your-api-key-here") {
+    try {
+      const envContent = fs.readFileSync(path.join(process.cwd(), ".env"), "utf-8");
+      const match = envContent.match(/ANTHROPIC_API_KEY=(.+)/);
+      if (match) apiKey = match[1].trim().replace(/^["']|["']$/g, "");
+    } catch { /* ignore */ }
+  }
   if (!apiKey || apiKey === "your-api-key-here") {
     // Generate placeholder comments without AI
     const comments = [];
@@ -135,25 +144,29 @@ Rispondi in formato JSON con questa struttura:
 
   // Save global comment with null sectionId
   if (parsed.global) {
-    const globalComment = await prisma.aIComment.upsert({
-      where: {
-        assessmentId_sectionId: {
-          assessmentId: id,
-          sectionId: null as unknown as string,
-        },
-      },
-      update: {
-        commentText: parsed.global,
-        modelUsed: "claude-sonnet-4-20250514",
-        generatedAt: new Date(),
-      },
-      create: {
-        assessmentId: id,
-        sectionId: null,
-        commentText: parsed.global,
-        modelUsed: "claude-sonnet-4-20250514",
-      },
+    const existing = await prisma.aIComment.findFirst({
+      where: { assessmentId: id, sectionId: null },
     });
+    let globalComment;
+    if (existing) {
+      globalComment = await prisma.aIComment.update({
+        where: { id: existing.id },
+        data: {
+          commentText: parsed.global,
+          modelUsed: "claude-sonnet-4-20250514",
+          generatedAt: new Date(),
+        },
+      });
+    } else {
+      globalComment = await prisma.aIComment.create({
+        data: {
+          assessmentId: id,
+          sectionId: null,
+          commentText: parsed.global,
+          modelUsed: "claude-sonnet-4-20250514",
+        },
+      });
+    }
     comments.push(globalComment);
   }
 

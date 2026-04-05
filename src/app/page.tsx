@@ -49,12 +49,6 @@ export default function HomePage() {
     <div>
       <div className="flex items-center justify-between mb-6">
         <h1 className="text-2xl font-bold text-tn-blue">Assessment AI Readiness</h1>
-        <Link
-          href="/assessment/new"
-          className="bg-tn-orange hover:bg-orange-600 text-white px-5 py-2.5 rounded-lg transition-colors font-semibold"
-        >
-          + Nuovo Assessment
-        </Link>
       </div>
 
       {assessments.length === 0 ? (
