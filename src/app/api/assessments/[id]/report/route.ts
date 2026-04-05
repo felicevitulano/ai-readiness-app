@@ -397,7 +397,7 @@ export async function POST(
   try {
     const pdfBuffer = await generatePdfBuffer(docDefinition);
     const companyName = assessment.company.ragioneSociale.replace(/\s+/g, "_");
-    return new NextResponse(pdfBuffer, {
+    return new NextResponse(new Uint8Array(pdfBuffer), {
       headers: {
         "Content-Type": "application/pdf",
         "Content-Disposition": `attachment; filename="Report_AI_Readiness_${companyName}.pdf"`,
