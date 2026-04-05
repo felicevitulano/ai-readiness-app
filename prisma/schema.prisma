@@ -1,0 +1,113 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model Company {
+  id             String       @id @default(cuid())
+  ragioneSociale String       @map("ragione_sociale")
+  partitaIva     String       @unique @map("partita_iva")
+  settore        String
+  sitoWeb        String?      @map("sito_web")
+  numeroAddetti  Int?         @map("numero_addetti")
+  fatturato      String?
+  createdAt      DateTime     @default(now()) @map("created_at")
+  updatedAt      DateTime     @updatedAt @map("updated_at")
+  assessments    Assessment[]
+
+  @@map("companies")
+}
+
+model Section {
+  id        String     @id @default(cuid())
+  code      String     @unique
+  name      String
+  order     Int
+  questions Question[]
+  scores    AssessmentScore[]
+  comments  AIComment[]
+
+  @@map("sections")
+}
+
+model Question {
+  id        String   @id @default(cuid())
+  sectionId String   @map("section_id")
+  section   Section  @relation(fields: [sectionId], references: [id])
+  number    Int
+  text      String
+  order     Int
+  answers   Answer[]
+
+  @@map("questions")
+}
+
+model Assessment {
+  id                   String            @id @default(cuid())
+  companyId            String            @map("company_id")
+  company              Company           @relation(fields: [companyId], references: [id])
+  status               String            @default("draft")
+  activeSections       String            @default("[]") @map("active_sections")
+  globalScorePercent   Float?            @map("global_score_percent")
+  globalMaturityLevel  String?           @map("global_maturity_level")
+  createdAt            DateTime          @default(now()) @map("created_at")
+  updatedAt            DateTime          @updatedAt @map("updated_at")
+  completedAt          DateTime?         @map("completed_at")
+  answers              Answer[]
+  scores               AssessmentScore[]
+  comments             AIComment[]
+
+  @@map("assessments")
+}
+
+model Answer {
+  id           String     @id @default(cuid())
+  assessmentId String     @map("assessment_id")
+  assessment   Assessment @relation(fields: [assessmentId], references: [id], onDelete: Cascade)
+  questionId   String     @map("question_id")
+  question     Question   @relation(fields: [questionId], references: [id])
+  score        Int?
+  notes        String?
+  respondent   String?
+  source       String?
+  createdAt    DateTime   @default(now()) @map("created_at")
+  updatedAt    DateTime   @updatedAt @map("updated_at")
+
+  @@unique([assessmentId, questionId])
+  @@map("answers")
+}
+
+model AssessmentScore {
+  id             String     @id @default(cuid())
+  assessmentId   String     @map("assessment_id")
+  assessment     Assessment @relation(fields: [assessmentId], references: [id], onDelete: Cascade)
+  sectionId      String?    @map("section_id")
+  section        Section?   @relation(fields: [sectionId], references: [id])
+  averageScore   Float      @map("average_score")
+  percentScore   Float      @map("percent_score")
+  maturityLevel  String     @map("maturity_level")
+  interpretation String
+  updatedAt      DateTime   @updatedAt @map("updated_at")
+
+  @@unique([assessmentId, sectionId])
+  @@map("assessment_scores")
+}
+
+model AIComment {
+  id           String     @id @default(cuid())
+  assessmentId String     @map("assessment_id")
+  assessment   Assessment @relation(fields: [assessmentId], references: [id], onDelete: Cascade)
+  sectionId    String?    @map("section_id")
+  section      Section?   @relation(fields: [sectionId], references: [id])
+  commentText  String     @map("comment_text")
+  modelUsed    String     @map("model_used")
+  generatedAt  DateTime   @default(now()) @map("generated_at")
+  updatedAt    DateTime   @updatedAt @map("updated_at")
+
+  @@unique([assessmentId, sectionId])
+  @@map("ai_comments")
+}

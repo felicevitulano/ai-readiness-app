@@ -1,22 +1,23 @@
 @import "tailwindcss";
 
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  --tn-blue: #1B1464;
+  --tn-orange: #E87511;
+  --tn-blue-light: #2d2494;
+  --tn-orange-light: #FFF3E0;
+  --background: #f8f9fa;
+  --foreground: #1B1464;
 }
 
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
+  --color-tn-blue: var(--tn-blue);
+  --color-tn-orange: var(--tn-orange);
+  --color-tn-blue-light: var(--tn-blue-light);
+  --color-tn-orange-light: var(--tn-orange-light);
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
 }
 
 body {
@@ -24,3 +25,14 @@ body {
   color: var(--foreground);
   font-family: Arial, Helvetica, sans-serif;
 }
+
+/* Score badges */
+.score-badge {
+  @apply inline-flex items-center px-3 py-1 rounded-full text-sm font-semibold;
+}
+.score-inesistente { @apply bg-red-100 text-red-800; }
+.score-iniziale { @apply bg-orange-100 text-orange-800; }
+.score-definito { @apply bg-yellow-100 text-yellow-800; }
+.score-gestito { @apply bg-blue-100 text-blue-800; }
+.score-ottimizzato { @apply bg-green-100 text-green-800; }
+.score-na { @apply bg-gray-100 text-gray-500; }
