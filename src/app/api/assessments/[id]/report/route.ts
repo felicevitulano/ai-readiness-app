@@ -5,17 +5,21 @@ import { buildReportPrompt } from "@/lib/report-prompt";
 import path from "path";
 import fs from "fs";
 
+function safeGetLogoBase64(): string {
+  try {
+    const logoPath = path.join(process.cwd(), "public", "logo.png");
+    const buf = fs.readFileSync(logoPath);
+    return "data:image/png;base64," + buf.toString("base64");
+  } catch {
+    return "";
+  }
+}
+
 const TN_BLUE = "#1B1464";
 const TN_ORANGE = "#E87511";
 
-function getLogoBase64(): string {
-  const logoPath = path.join(process.cwd(), "public", "logo.png");
-  const buf = fs.readFileSync(logoPath);
-  return "data:image/png;base64," + buf.toString("base64");
-}
-
 function buildDocDefinition(report: any, assessment: any) {
-  const logo = getLogoBase64();
+  const logo = safeGetLogoBase64();
   const date = new Date().toLocaleDateString("it-IT", {
     day: "2-digit",
     month: "long",
@@ -25,7 +29,9 @@ function buildDocDefinition(report: any, assessment: any) {
   const content: any[] = [];
 
   // --- COVER PAGE ---
-  content.push({ image: logo, width: 200, alignment: "center", margin: [0, 80, 0, 30] });
+  if (logo) {
+    content.push({ image: logo, width: 200, alignment: "center", margin: [0, 80, 0, 30] });
+  }
   content.push({
     text: "AI Readiness\nAssessment Report",
     style: "coverTitle",
@@ -313,6 +319,7 @@ export async function POST(
   _request: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  try {
   const { id } = await params;
 
   const assessment = await prisma.assessment.findUnique({
@@ -361,15 +368,7 @@ export async function POST(
     sections,
   });
 
-  // Read API key - fallback to .env file if shell env is empty
-  let apiKey = process.env.ANTHROPIC_API_KEY;
-  if (!apiKey || apiKey === "your-api-key-here") {
-    try {
-      const envContent = fs.readFileSync(path.join(process.cwd(), ".env"), "utf-8");
-      const match = envContent.match(/ANTHROPIC_API_KEY=(.+)/);
-      if (match) apiKey = match[1].trim().replace(/^["']|["']$/g, "");
-    } catch { /* ignore */ }
-  }
+  const apiKey = process.env.ANTHROPIC_API_KEY;
   if (!apiKey || apiKey === "your-api-key-here") {
     return NextResponse.json({ error: "API key Anthropic non configurata" }, { status: 500 });
   }
@@ -405,5 +404,12 @@ export async function POST(
     });
   } catch (err: any) {
     return NextResponse.json({ error: "Errore generazione PDF: " + err.message }, { status: 500 });
+  }
+  } catch (error) {
+    console.error("POST /api/assessments/[id]/report error:", error);
+    return NextResponse.json(
+      { error: "Errore nella generazione del report" },
+      { status: 500 }
+    );
   }
 }
