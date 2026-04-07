@@ -43,6 +43,7 @@ export default function NewAssessmentPage() {
   const [selectedCompanyId, setSelectedCompanyId] = useState<string | null>(null);
   const [activeSections, setActiveSections] = useState<string[]>([]);
   const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   const [form, setForm] = useState({
     ragioneSociale: "",
@@ -54,8 +55,8 @@ export default function NewAssessmentPage() {
   });
 
   useEffect(() => {
-    fetch("/api/sections").then((r) => r.json()).then(setSections);
-    fetch("/api/companies").then((r) => r.json()).then(setCompanies);
+    fetch("/api/sections").then((r) => r.json()).then(setSections).catch(() => setError("Errore nel caricamento delle sezioni"));
+    fetch("/api/companies").then((r) => r.json()).then(setCompanies).catch(() => setError("Errore nel caricamento delle aziende"));
   }, []);
 
   useEffect(() => {
@@ -66,6 +67,7 @@ export default function NewAssessmentPage() {
 
   const handleCompanySubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    setError(null);
 
     if (selectedCompanyId) {
       setStep("sections");
@@ -73,30 +75,49 @@ export default function NewAssessmentPage() {
     }
 
     setSaving(true);
-    const res = await fetch("/api/companies", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(form),
-    });
-    const company = await res.json();
-    setSelectedCompanyId(company.id);
-    setSaving(false);
-    setStep("sections");
+    try {
+      const res = await fetch("/api/companies", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(form),
+      });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data.error || `Errore del server (${res.status})`);
+      }
+      const company = await res.json();
+      setSelectedCompanyId(company.id);
+      setStep("sections");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Errore nella creazione dell'azienda");
+    } finally {
+      setSaving(false);
+    }
   };
 
   const handleCreateAssessment = async () => {
     if (!selectedCompanyId) return;
+    setError(null);
     setSaving(true);
-    const res = await fetch("/api/assessments", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        companyId: selectedCompanyId,
-        activeSections,
-      }),
-    });
-    const assessment = await res.json();
-    router.push(`/assessment/${assessment.id}/questionnaire`);
+    try {
+      const res = await fetch("/api/assessments", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          companyId: selectedCompanyId,
+          activeSections,
+        }),
+      });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data.error || `Errore del server (${res.status})`);
+      }
+      const assessment = await res.json();
+      router.push(`/assessment/${assessment.id}/questionnaire`);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Errore nella creazione dell'assessment");
+      setSaving(false);
+    }
   };
 
   const toggleSection = (code: string) => {
@@ -109,6 +130,12 @@ export default function NewAssessmentPage() {
     return (
       <div className="max-w-2xl mx-auto">
         <h1 className="text-2xl font-bold text-tn-blue mb-6">Nuovo Assessment</h1>
+
+        {error && (
+          <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg mb-4">
+            {error}
+          </div>
+        )}
 
         {companies.length > 0 && (
           <div className="bg-white rounded-xl shadow-sm p-6 mb-6">
@@ -237,6 +264,12 @@ export default function NewAssessmentPage() {
         Seleziona le sezioni su cui vuoi effettuare l&apos;audit. Puoi deselezionare le aree non
         applicabili.
       </p>
+
+      {error && (
+        <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg mb-4">
+          {error}
+        </div>
+      )}
 
       <div className="bg-white rounded-xl shadow-sm p-6 space-y-3">
         {sections.map((section) => (

@@ -47,36 +47,47 @@ export default function QuestionnairePage() {
   const [saving, setSaving] = useState(false);
   const [loading, setLoading] = useState(true);
   const [companyName, setCompanyName] = useState("");
+  const [error, setError] = useState<string | null>(null);
+  const [completing, setCompleting] = useState(false);
 
   useEffect(() => {
     const load = async () => {
-      const [assessmentRes, sectionsRes, answersRes] = await Promise.all([
-        fetch(`/api/assessments/${assessmentId}`),
-        fetch("/api/sections"),
-        fetch(`/api/assessments/${assessmentId}/answers`),
-      ]);
+      try {
+        const [assessmentRes, sectionsRes, answersRes] = await Promise.all([
+          fetch(`/api/assessments/${assessmentId}`),
+          fetch("/api/sections"),
+          fetch(`/api/assessments/${assessmentId}/answers`),
+        ]);
 
-      const assessment = await assessmentRes.json();
-      const allSections: Section[] = await sectionsRes.json();
-      const existingAnswers: AnswerFromDB[] = await answersRes.json();
+        if (!assessmentRes.ok || !sectionsRes.ok || !answersRes.ok) {
+          throw new Error("Errore nel caricamento dei dati dell'assessment");
+        }
 
-      const activeCodes: string[] = JSON.parse(assessment.activeSections);
-      const filtered = allSections.filter((s) => activeCodes.includes(s.code));
-      setSections(filtered);
-      setCompanyName(assessment.company.ragioneSociale);
+        const assessment = await assessmentRes.json();
+        const allSections: Section[] = await sectionsRes.json();
+        const existingAnswers: AnswerFromDB[] = await answersRes.json();
 
-      const ansMap: Record<string, Answer> = {};
-      for (const a of existingAnswers) {
-        ansMap[a.questionId] = {
-          questionId: a.questionId,
-          score: a.score,
-          notes: a.notes || "",
-          respondent: a.respondent || "",
-          source: a.source || "",
-        };
+        const activeCodes: string[] = JSON.parse(assessment.activeSections);
+        const filtered = allSections.filter((s) => activeCodes.includes(s.code));
+        setSections(filtered);
+        setCompanyName(assessment.company.ragioneSociale);
+
+        const ansMap: Record<string, Answer> = {};
+        for (const a of existingAnswers) {
+          ansMap[a.questionId] = {
+            questionId: a.questionId,
+            score: a.score,
+            notes: a.notes || "",
+            respondent: a.respondent || "",
+            source: a.source || "",
+          };
+        }
+        setAnswers(ansMap);
+      } catch (err) {
+        setError(err instanceof Error ? err.message : "Errore nel caricamento");
+      } finally {
+        setLoading(false);
       }
-      setAnswers(ansMap);
-      setLoading(false);
     };
     load();
   }, [assessmentId]);
@@ -94,12 +105,22 @@ export default function QuestionnairePage() {
     }));
 
     setSaving(true);
-    await fetch(`/api/assessments/${assessmentId}/answers`, {
-      method: "PUT",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ answers: sectionAnswers }),
-    });
-    setSaving(false);
+    setError(null);
+    try {
+      const res = await fetch(`/api/assessments/${assessmentId}/answers`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ answers: sectionAnswers }),
+      });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data.error || `Errore nel salvataggio (${res.status})`);
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Errore nel salvataggio delle risposte");
+    } finally {
+      setSaving(false);
+    }
   }, [currentSection, answers, assessmentId]);
 
   const setAnswer = (questionId: string, field: keyof Answer, value: string | number | null) => {
@@ -134,18 +155,41 @@ export default function QuestionnairePage() {
   };
 
   const handleComplete = async () => {
-    await saveCurrentSection();
-    // Calculate scores
-    await fetch(`/api/assessments/${assessmentId}/scores`);
-    // Generate AI comments
-    await fetch(`/api/assessments/${assessmentId}/comments`, { method: "POST" });
-    // Mark as completed
-    await fetch(`/api/assessments/${assessmentId}`, {
-      method: "PUT",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ status: "completed" }),
-    });
-    router.push(`/assessment/${assessmentId}/dashboard`);
+    setError(null);
+    setCompleting(true);
+    try {
+      await saveCurrentSection();
+
+      // Calculate scores
+      const scoresRes = await fetch(`/api/assessments/${assessmentId}/scores`);
+      if (!scoresRes.ok) {
+        const data = await scoresRes.json().catch(() => ({}));
+        throw new Error(data.error || "Errore nel calcolo dei punteggi");
+      }
+
+      // Generate AI comments
+      const commentsRes = await fetch(`/api/assessments/${assessmentId}/comments`, { method: "POST" });
+      if (!commentsRes.ok) {
+        const data = await commentsRes.json().catch(() => ({}));
+        throw new Error(data.error || "Errore nella generazione dei commenti");
+      }
+
+      // Mark as completed
+      const completeRes = await fetch(`/api/assessments/${assessmentId}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ status: "completed" }),
+      });
+      if (!completeRes.ok) {
+        const data = await completeRes.json().catch(() => ({}));
+        throw new Error(data.error || "Errore nel completamento dell'assessment");
+      }
+
+      router.push(`/assessment/${assessmentId}/dashboard`);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Errore nel completamento dell'assessment");
+      setCompleting(false);
+    }
   };
 
   if (loading) {
@@ -164,6 +208,14 @@ export default function QuestionnairePage() {
 
   return (
     <div className="max-w-4xl mx-auto">
+      {/* Error banner */}
+      {error && (
+        <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg mb-4 flex items-center justify-between">
+          <span>{error}</span>
+          <button onClick={() => setError(null)} className="text-red-500 hover:text-red-700 ml-4 font-bold">✕</button>
+        </div>
+      )}
+
       {/* Header */}
       <div className="mb-6">
         <div className="flex items-center justify-between mb-2">
@@ -311,9 +363,10 @@ export default function QuestionnairePage() {
         ) : (
           <button
             onClick={handleComplete}
-            className="bg-green-600 hover:bg-green-700 text-white px-6 py-2.5 rounded-lg font-semibold"
+            disabled={completing}
+            className="bg-green-600 hover:bg-green-700 text-white px-6 py-2.5 rounded-lg font-semibold disabled:opacity-50"
           >
-            Completa e vedi risultati
+            {completing ? "Completamento in corso..." : "Completa e vedi risultati"}
           </button>
         )}
       </div>
